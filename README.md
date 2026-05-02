@@ -1,4 +1,4 @@
-﻿# Markdown Editor
+# Markdown Editor
 
 > VS Code 风格本地 Markdown 编辑器 · 纯本地、支持局域网 P2P 同步和版本管理
 
