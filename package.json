@@ -1,0 +1,49 @@
+{
+  "name": "markdown-editor",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Markdown Editor - 本地 Markdown 编辑器",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "vite --port 5000 --host",
+    "build": "vite build",
+    "start": "vite preview --port 5000 --host",
+    "preinstall": "npx only-allow pnpm",
+    "lint": "eslint",
+    "ts-check": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.11.0",
+    "@tauri-apps/plugin-dialog": "^2.7.0",
+    "diff": "^9.0.0",
+    "fuse.js": "^7.3.0",
+    "rehype-katex": "^7.0.1",
+    "rehype-stringify": "^10.0.1",
+    "remark-breaks": "^4.0.0",
+    "remark-frontmatter": "^5.0.0",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
+    "remark-parse": "^11.0.0",
+    "remark-rehype": "^11.1.2",
+    "unified": "^11.0.5",
+    "unist-util-visit": "^5.1.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.0",
+    "@types/node": "^22.10.5",
+    "@types/wicg-file-system-access": "^2023.10.7",
+    "autoprefixer": "^10.4.20",
+    "esbuild": "^0.24.2",
+    "eslint": "^9",
+    "only-allow": "^1.2.2",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.6.0",
+    "typescript-eslint": "^8",
+    "vite": "^7.2.4"
+  },
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "pnpm": ">=9.0.0"
+  }
+}
