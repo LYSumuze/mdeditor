@@ -33,13 +33,13 @@
 
 ### 安装依赖
 
-`ash
+`bash
 pnpm install
 `
 
 ### 开发调试
 
-`ash
+`bash
 pnpm dev
 `
 
@@ -54,7 +54,7 @@ pnpm dev
 
 #### 纯 Web 版
 
-`ash
+`bash
 pnpm build        # 构建到 dist/ 目录
 pnpm start        # 本地预览构建后的版本
 `
@@ -63,7 +63,7 @@ dist/ 目录下的静态文件可直接部署到任何 Web 服务器。
 
 #### Tauri 桌面版（Windows）
 
-`ash
+`bash
 pnpm tauri build
 `
 
@@ -84,7 +84,7 @@ sis/ 目录的安装程序
 
 **Linux 上**（构建 .deb）：
 
-`ash
+`bash
 unzip mdeditor.zip -d mdeditor
 cd mdeditor
 bash pack-linux.sh
