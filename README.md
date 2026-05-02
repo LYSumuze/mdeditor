@@ -116,7 +116,7 @@ bash pack-linux.sh
 
 ## 技术架构
 
-`
+```
 mdeditor/
 ├── index.html              # HTML 入口
 ├── src/
@@ -144,7 +144,7 @@ mdeditor/
 ├── postcss.config.js       # PostCSS 配置
 ├── tsconfig.json           # TypeScript 配置
 └── package.json            # 依赖管理（仅 pnpm）
-`
+```
 
 ### 核心依赖
 
