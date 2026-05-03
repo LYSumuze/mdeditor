@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   打包 mdeditor 项目，清理平台相关文件，生成压缩包供 Linux 编译
 
@@ -8,7 +8,7 @@
 #>
 
 $ErrorActionPreference = 'Stop'
-$ProjectRoot = Split-Path -Parent $PSScriptRoot
+$ProjectRoot = $PSScriptRoot
 $ZipPath = Join-Path $ProjectRoot 'mdeditor.zip'
 
 Write-Host "=== mdeditor Windows 打包脚本 ===" -ForegroundColor Cyan
@@ -53,4 +53,4 @@ $ZipSize = (Get-Item $ZipPath).Length / 1MB
 Write-Host "`n=== 打包完成 ===" -ForegroundColor Cyan
 Write-Host "输出: $ZipPath" -ForegroundColor White
 Write-Host "大小: $('{0:N2}' -f $ZipSize) MB" -ForegroundColor White
-Write-Host "`n把此文件传到 Linux 机器上，解压后运行 scripts/pack-linux.sh" -ForegroundColor Yellow
+Write-Host "`n把此文件传到 Linux 机器上，解压后运行 ./pack-linux.sh" -ForegroundColor Yellow

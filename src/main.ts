@@ -972,6 +972,58 @@ function attachEventListeners(): void {
     }, { signal });
   });
 
+  // 菜单下拉悬停处理（防止 Tauri WebView 中 hover 间隙导致菜单消失）
+  const menuHideTimers = new Map<Element, number>();
+  document.querySelectorAll('.menu-item').forEach(item => {
+    const dropdown = item.querySelector('.menu-dropdown') as HTMLElement;
+    if (!dropdown) return;
+
+    // 关闭所有菜单下拉的辅助函数
+    const closeAllMenus = () => {
+      document.querySelectorAll('.menu-dropdown').forEach(dd => {
+        (dd as HTMLElement).style.display = '';
+      });
+    };
+
+    item.addEventListener('mouseenter', () => {
+      // 清空当前项的隐藏计时器
+      const existing = menuHideTimers.get(item);
+      if (existing !== undefined) { clearTimeout(existing); menuHideTimers.delete(item); }
+      // 先关所有，再开当前 → 避免上一个菜单残留
+      closeAllMenus();
+      dropdown.style.display = 'block';
+    }, { signal });
+
+    item.addEventListener('mouseleave', () => {
+      const timer = window.setTimeout(() => {
+        dropdown.style.display = '';
+        menuHideTimers.delete(item);
+      }, 200);
+      menuHideTimers.set(item, timer);
+    }, { signal });
+  });
+
+  // 点击菜单项后关闭对应下拉
+  document.querySelectorAll('.menu-dropdown-item').forEach(el => {
+    el.addEventListener('click', () => {
+      const menuItem = el.closest('.menu-item');
+      if (menuItem) {
+        const dd = menuItem.querySelector('.menu-dropdown') as HTMLElement;
+        if (dd) dd.style.display = '';
+      }
+    }, { signal });
+  });
+
+  // 点击菜单外部关闭所有下拉
+  document.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement;
+    if (!target.closest('.menu-item')) {
+      document.querySelectorAll('.menu-dropdown').forEach(dd => {
+        (dd as HTMLElement).style.display = '';
+      });
+    }
+  }, { signal });
+
   // 文件树点击（使用事件委托）
   document.addEventListener('click', (e) => {
     const target = e.target as HTMLElement;

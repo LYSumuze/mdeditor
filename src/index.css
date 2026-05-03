@@ -125,9 +125,7 @@ html, body {
   box-shadow: 0 4px 12px rgba(0,0,0,0.4);
 }
 
-.menu-item:hover .menu-dropdown {
-  display: block;
-}
+/* 移除: JavaScript 控制下拉显隐，避开 Tauri WebView hover 间隙问题 */
 
 .menu-dropdown-item {
   display: flex;
