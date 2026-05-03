@@ -274,6 +274,7 @@ fn write_error_log(app_handle: tauri::AppHandle, log_content: String) -> Result<
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_log::Builder::new().build())
         .setup(|_app| {
             Ok(())

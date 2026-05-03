@@ -9,6 +9,30 @@ import { SearchService, type SearchResult as SearchResultType } from './services
 import { P2PSyncService, type SyncStatus } from './services/p2pSync';
 import { isTauri, setupTauriShim, showOpenDialog, onMenuOpenFolder, onMenuSave, onMenuUndo, onMenuRedo, onMenuFind, onExportLogs } from './services/tauri-api';
 
+// ── 跨平台剪贴板（Tauri 插件 > Web API） ──
+let tauriClipboardReadText: ((() => Promise<string>) | null) = null;
+let tauriClipboardWriteText: (((text: string) => Promise<void>) | null) = null;
+if (isTauri) {
+  import('@tauri-apps/plugin-clipboard-manager').then((mod) => {
+    tauriClipboardReadText = mod.readText;
+    tauriClipboardWriteText = mod.writeText;
+  }).catch(() => {});
+}
+
+async function clipboardWrite(text: string): Promise<void> {
+  if (tauriClipboardWriteText) {
+    try { await tauriClipboardWriteText(text); return; } catch {}
+  }
+  try { await navigator.clipboard.writeText(text); } catch {}
+}
+
+async function clipboardRead(): Promise<string> {
+  if (tauriClipboardReadText) {
+    try { return await tauriClipboardReadText(); } catch {}
+  }
+  try { return await navigator.clipboard.readText(); } catch { return ''; }
+}
+
 // ============ 应用状态 ============
 interface AppState {
   sidebar: 'files' | 'search' | 'sync' | 'history' | null;
@@ -829,7 +853,7 @@ function addCopyButtonsToCodeBlocks(container: HTMLElement): void {
       e.stopPropagation();
       const text = code.textContent || '';
       try {
-        await navigator.clipboard.writeText(text);
+        await clipboardWrite(text);
         btn.textContent = '已复制';
         btn.classList.add('copied');
         setTimeout(() => {
@@ -1142,6 +1166,11 @@ function attachEventListeners(): void {
   // 编辑器内容变更（直接在编辑器元素上绑定，避免依赖事件冒泡）
   const editor = document.querySelector('[data-editor]') as HTMLTextAreaElement;
   if (editor) {
+    // 在内容变更前保存快照（用于手动 Undo/Redo）
+    editor.addEventListener('beforeinput', () => {
+      if (!isUndoingOrRedoing) saveUndoSnapshot();
+    });
+
     editor.addEventListener('input', () => {
       const tab = state.activeTab ? state.openFiles.get(state.activeTab) : null;
       if (tab) {
@@ -1328,11 +1357,19 @@ function attachEventListeners(): void {
           break;
         case 'f':
           e.preventDefault();
-          toggleFindReplace(false);
+          toggleFindReplace(true); // Ctrl+F 同时显示查找+替换
           break;
-        case 'h':
+        case 'z':
           e.preventDefault();
-          toggleFindReplace(true);
+          if (e.shiftKey) {
+            editorRedo(); // Ctrl+Shift+Z = 重做
+          } else {
+            editorUndo(); // Ctrl+Z = 撤销
+          }
+          break;
+        case 'y':
+          e.preventDefault();
+          editorRedo(); // Ctrl+Y = 重做
           break;
       }
     }
@@ -1460,13 +1497,11 @@ async function handleActionAsync(action: string, e?: Event): Promise<void> {
       editorRedo();
       break;
     case 'find':
-      toggleFindReplace(false);
-      break;
     case 'replace':
       toggleFindReplace(true);
       break;
     case 'toggle-find':
-      toggleFindReplace(false);
+      toggleFindReplace(true);
       break;
     case 'toggle-replace':
       toggleFindReplace(true);
@@ -1575,18 +1610,60 @@ function toggleFileSelection(path: string): void {
 }
 
 // --- Editor Undo/Redo ---
+// ── 手动 Undo/Redo 历史栈（跨平台，替代已弃用的 document.execCommand） ──
+const undoHistoryStacks: { undo: string[]; redo: string[] } = { undo: [], redo: [] };
+const MAX_UNDO_DEPTH = 200;
+let isUndoingOrRedoing = false;
+
+function saveUndoSnapshot(): void {
+  const editor = document.querySelector('textarea.editor-textarea') as HTMLTextAreaElement | null;
+  if (!editor || isUndoingOrRedoing) return;
+  const last = undoHistoryStacks.undo[undoHistoryStacks.undo.length - 1];
+  if (last !== editor.value) {
+    undoHistoryStacks.undo.push(editor.value);
+    undoHistoryStacks.redo.length = 0;
+    if (undoHistoryStacks.undo.length > MAX_UNDO_DEPTH) {
+      undoHistoryStacks.undo.shift();
+    }
+  }
+}
+
 function editorUndo(): void {
   const textarea = document.querySelector('textarea.editor-textarea') as HTMLTextAreaElement | null;
-  if (textarea) {
-    document.execCommand('undo');
+  if (!textarea || undoHistoryStacks.undo.length === 0) return;
+
+  isUndoingOrRedoing = true;
+  const currentValue = textarea.value;
+  undoHistoryStacks.redo.push(currentValue);
+  const prevValue = undoHistoryStacks.undo.pop()!;
+  textarea.value = prevValue;
+
+  const tab = state.activeTab ? state.openFiles.get(state.activeTab) : null;
+  if (tab) { tab.content = prevValue; tab.modified = true; }
+  updateTabModifiedIndicators();
+  if (state.activeView === 'split' || state.activeView === 'preview') {
+    renderPreview(prevValue);
   }
+  isUndoingOrRedoing = false;
 }
 
 function editorRedo(): void {
   const textarea = document.querySelector('textarea.editor-textarea') as HTMLTextAreaElement | null;
-  if (textarea) {
-    document.execCommand('redo');
+  if (!textarea || undoHistoryStacks.redo.length === 0) return;
+
+  isUndoingOrRedoing = true;
+  const currentValue = textarea.value;
+  undoHistoryStacks.undo.push(currentValue);
+  const nextValue = undoHistoryStacks.redo.pop()!;
+  textarea.value = nextValue;
+
+  const tab = state.activeTab ? state.openFiles.get(state.activeTab) : null;
+  if (tab) { tab.content = nextValue; tab.modified = true; }
+  updateTabModifiedIndicators();
+  if (state.activeView === 'split' || state.activeView === 'preview') {
+    renderPreview(nextValue);
   }
+  isUndoingOrRedoing = false;
 }
 
 // --- Find & Replace ---
@@ -1610,6 +1687,11 @@ function updateFindReplaceBar(): void {
   const replaceInput = bar.querySelector('.find-replace-replace-input') as HTMLElement | null;
   if (replaceInput) {
     replaceInput.style.display = findReplaceState.showReplace ? 'block' : 'none';
+  }
+  // 同步工具栏按钮 active 状态（CSS :hover 无法处理动态状态）
+  const toggleBtn = document.querySelector('.toolbar-btn[data-action="toggle-find"]') as HTMLElement | null;
+  if (toggleBtn) {
+    toggleBtn.classList.toggle('active', findReplaceState.visible);
   }
   if (findReplaceState.visible) {
     const queryInput = bar.querySelector('.find-replace-query-input') as HTMLInputElement | null;
@@ -2166,15 +2248,15 @@ function showContextMenu(x: number, y: number, editor: HTMLTextAreaElement | nul
     type ContextMenuItem = { label: string; icon: string; action?: () => void; disabled?: boolean; divider?: boolean; submenu?: { label: string; icon: string; action: () => void }[] };
     const items: ContextMenuItem[] = [];
     if (editor) {
-      items.push({ label: '撤销', icon: '↩', action: () => { document.execCommand('undo'); } });
-      items.push({ label: '重做', icon: '↪', action: () => { document.execCommand('redo'); } });
+      items.push({ label: '撤销', icon: '↩', action: () => { editorUndo(); } });
+      items.push({ label: '重做', icon: '↪', action: () => { editorRedo(); } });
       items.push({ label: '', icon: '', divider: true });
-      items.push({ label: '剪切', icon: '✂', action: () => { document.execCommand('cut'); }, disabled: !hasSelection });
-      items.push({ label: '复制', icon: '📋', action: () => { document.execCommand('copy'); }, disabled: !hasSelection });
-      items.push({ label: '粘贴', icon: '📎', action: () => { navigator.clipboard.readText().then(t => { insertAtCursor(editor, t); }); } });
-      items.push({ label: '删除', icon: '🗑', action: () => { document.execCommand('delete'); }, disabled: !hasSelection });
+      items.push({ label: '剪切', icon: '✂', action: () => { if (editor.selectionStart !== editor.selectionEnd) { saveUndoSnapshot(); const sel = editor.value.substring(editor.selectionStart, editor.selectionEnd); clipboardWrite(sel); editor.value = editor.value.substring(0, editor.selectionStart) + editor.value.substring(editor.selectionEnd); const tab = state.activeTab ? state.openFiles.get(state.activeTab) : null; if (tab) { tab.content = editor.value; tab.modified = true; } } }, disabled: !hasSelection });
+      items.push({ label: '复制', icon: '📋', action: () => { if (editor.selectionStart !== editor.selectionEnd) { clipboardWrite(editor.value.substring(editor.selectionStart, editor.selectionEnd)); } }, disabled: !hasSelection });
+      items.push({ label: '粘贴', icon: '📎', action: () => { clipboardRead().then(t => { saveUndoSnapshot(); insertAtCursor(editor, t); const tab = state.activeTab ? state.openFiles.get(state.activeTab) : null; if (tab) { tab.content = editor.value; tab.modified = true; } }); } });
+      items.push({ label: '删除', icon: '🗑', action: () => { if (editor.selectionStart !== editor.selectionEnd) { saveUndoSnapshot(); editor.value = editor.value.substring(0, editor.selectionStart) + editor.value.substring(editor.selectionEnd); const tab = state.activeTab ? state.openFiles.get(state.activeTab) : null; if (tab) { tab.content = editor.value; tab.modified = true; } } }, disabled: !hasSelection });
       items.push({ label: '', icon: '', divider: true });
-      items.push({ label: '全选', icon: '☑', action: () => { editor.select(); } });
+      items.push({ label: '全选', icon: '☑', action: () => { editor.focus(); editor.select(); } });
       items.push({ label: '', icon: '', divider: true });
       items.push({ label: '插入标题', icon: 'H', submenu: [
         { label: '一级标题 H1', icon: 'H1', action: () => { insertMarkdownPrefix(editor, '# '); } },
@@ -2198,8 +2280,8 @@ function showContextMenu(x: number, y: number, editor: HTMLTextAreaElement | nul
       items.push({ label: '', icon: '', divider: true });
       items.push({ label: '插入 Emoji', icon: '😀', action: undefined, submenu: [] }); // emoji submenu handled specially
     } else {
-      items.push({ label: '复制', icon: '📋', action: () => { document.execCommand('copy'); }, disabled: !window.getSelection()?.toString() });
-      items.push({ label: '全选', icon: '☑', action: () => { document.execCommand('selectAll'); } });
+      items.push({ label: '复制', icon: '📋', action: () => { const sel = window.getSelection()?.toString(); if (sel) clipboardWrite(sel); }, disabled: !window.getSelection()?.toString() });
+      items.push({ label: '全选', icon: '☑', action: () => { document.querySelector('textarea.editor-textarea')?.focus(); document.querySelector('textarea.editor-textarea')?.select(); } });
     }
     items.forEach(item => {
       if (item.divider) { const d = document.createElement('div'); d.className = 'context-menu-divider'; menu.appendChild(d); return; }
@@ -2661,7 +2743,7 @@ async function initializeP2P(): Promise<void> {
 
 async function copyPeerId(): Promise<void> {
   if (state.peerId) {
-    await navigator.clipboard.writeText(state.peerId);
+    await clipboardWrite(state.peerId);
     showModal('提示', '<p>Peer ID 已复制到剪贴板</p>');
   }
 }
@@ -3088,7 +3170,7 @@ async function initializeServices(): Promise<void> {
       window.electronAPI.onMenuRedo(() => editorRedo());
     }
     if (window.electronAPI.onMenuFind) {
-      window.electronAPI.onMenuFind(() => toggleFindReplace(false));
+      window.electronAPI.onMenuFind(() => toggleFindReplace(true));
     }
     if (window.electronAPI.onCheckUnsaved) {
       window.electronAPI.onCheckUnsaved(() => {

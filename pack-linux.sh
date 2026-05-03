@@ -24,6 +24,7 @@ echo ""
 echo "[1/6] 安装系统依赖..."
 
 if command -v apt &>/dev/null; then
+    export DEBIAN_FRONTEND=noninteractive
     sudo apt update
     sudo apt install -y \
         build-essential \
@@ -138,7 +139,8 @@ fi
 echo ""
 echo "[5/6] 安装前端依赖..."
 cd "$PROJECT_ROOT"
-pnpm install --frozen-lockfile
+# --prefer-offline: 利用 pnpm 全局 store，反复构建时不重复下载
+pnpm install --frozen-lockfile --prefer-offline
 echo "✓ 依赖安装完成"
 
 # ── 6. 构建 Tauri 应用 ──
